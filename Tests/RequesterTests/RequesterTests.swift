@@ -479,11 +479,7 @@ class RequesterTests: XCTestCase {
         let expect = expectation(description: "result")
 
         // left succeeds immediately
-        let left = Requester<String> { completion in
-            completion(.success("left"))
-            return DelegateRequestCancelable { _ in
-            }
-        }
+        let left = Requester(result: .success("left"))
 
         let right = Requester<String> { completion in
             return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
