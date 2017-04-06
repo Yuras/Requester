@@ -132,6 +132,81 @@ public struct Requester<T> {
             }
         }
     }
+
+    /**
+     Run two requests concurrently, return the result of the first successfull one, other one will be cancelled. When one of them fails, other one is cancelled. On cancel, it cancelles both children.
+     */
+    public func race(_ right: Requester<T>) -> Requester<T> {
+        let left = self
+        return Requester<T> { completion in
+            var leftRequest: RequestCancelable?
+            var rightRequest: RequestCancelable?
+
+            // done means that we already called the completion
+            var done = false
+            // number of childred exited so far
+            var exited = 0
+
+            func handler(other: RequestCancelable?) -> ((RequestResult<T>) -> Void) {
+                return { result in
+                    exited += 1
+
+                    guard !done else {
+                        // other one already called completion, nothing to do here
+                        return
+                    }
+
+                    switch result {
+                    case .success(let value):
+                        // we are the winner!
+                        done = true
+                        other?.cancel()
+                        completion(.success(value))
+                    case .failure(let error):
+                        // we are the failing winner...
+                        done = true
+                        other?.cancel()
+                        completion(.failure(error))
+                    case .cancelled:
+                        if exited == 2 {
+                            // we are the last cancelled child, lets notify parent
+                            done = true
+                            completion(.cancelled)
+                        }
+                    }
+                }
+            }
+
+            leftRequest = left.request(handler(other: rightRequest))
+
+            // Note that left could immediately return result (or just fail)
+            // We don't need to start the right one in that case
+            if !done {
+                rightRequest = right.request(handler(other: leftRequest))
+            }
+
+            return DelegateRequestCancelable {
+                leftRequest?.cancel()
+                rightRequest?.cancel()
+            }
+        }
+    }
+}
+
+class DelegateRequestCancelable: RequestCancelable {
+    public var cancelImp: ((Void) -> (Void))?
+
+    public init(cancelImp: @escaping (Void) -> Void) {
+        self.cancelImp = cancelImp
+    }
+
+    func cancel() {
+        guard let imp = cancelImp else {
+            return
+        }
+        imp()
+        self.cancelImp = nil
+    }
 }
 
 private class SerialRequestCancelable: RequestCancelable {
