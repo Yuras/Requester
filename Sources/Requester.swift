@@ -196,6 +196,107 @@ public struct Requester<T> {
             }
         }
     }
+
+    /** Run two request concurrently, wait for both to succeed and return both results. If one fails, then other one will be cancelled.
+     */
+    public func concurrently<U>(_ right: Requester<U>) -> Requester<(T, U)> {
+        let left = self
+        return Requester<(T,U)> { completion in
+            var leftRequest: RequestCancelable?
+            var rightRequest: RequestCancelable?
+
+            // done means that we already called the completion
+            var done = false
+            // number of childred exited so far
+            var exited = 0
+
+            func handler<R>(other: RequestCancelable?, block: @escaping (R)->Void) -> ((RequestResult<R>) -> Void) {
+                return { result in
+                    exited += 1
+
+                    guard !done else {
+                        // other one already called completion, nothing to do here
+                        return
+                    }
+
+                    switch result {
+                    case .success(let value):
+                        block(value)
+                    case .failure(let error):
+                        done = true
+                        other?.cancel()
+                        completion(.failure(error))
+                    case .cancelled:
+                        if exited == 2 {
+                            // we are the last cancelled child, lets notify parent
+                            done = true
+                            completion(.cancelled)
+                        }
+                    }
+                }
+            }
+
+            var t: T?
+            var u: U?
+
+            func onResult() {
+                guard let t = t else {
+                    return
+                }
+                guard let u = u else {
+                    return
+                }
+                // both results are available
+                done = true
+                completion(.success(t,u))
+            }
+
+            leftRequest = left.request(handler(other: rightRequest) { value in
+                t = value
+                onResult()
+            })
+
+            // Note that left could immediately fail
+            // We don't need to start the right one in that case
+            if !done {
+                rightRequest = right.request(handler(other: leftRequest) { value in
+                    u = value
+                    onResult()
+                })
+            }
+
+            return DelegateRequestCancelable {
+                leftRequest?.cancel()
+                rightRequest?.cancel()
+            }
+        }
+    }
+
+    /**
+     Run a number of requests one by one in a sequence
+     */
+    public static func sequence(_ requests: [Requester<T>]) -> Requester<[T]> {
+        let empty = Requester<[T]>(result:.success([]))
+        return requests.reduce(empty) { left, right in
+            left.then { result in
+                right.map { t in
+                    result + [t]
+                }
+            }
+        }
+    }
+
+    /**
+     Run a number of requests concurrently
+     */
+    public static func concurrently(_ requests: [Requester<T>]) -> Requester<[T]> {
+        let empty = Requester<[T]>(result:.success([]))
+        return requests.reduce(empty) { left, right in
+            left.concurrently(right).map { (result, t) in
+                result + [t]
+            }
+        }
+    }
 }
 
 private class DelegateRequestCancelable: RequestCancelable {

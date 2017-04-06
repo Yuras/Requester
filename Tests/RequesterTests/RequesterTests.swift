@@ -515,6 +515,218 @@ class RequesterTests: XCTestCase {
             XCTAssertNil(error)
         }
     }
+
+    func testSequence_success() {
+        let expect = expectation(description: "result")
+
+        let r1 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r1"))
+                }
+            }
+        }
+
+        let r2 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.4) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r2"))
+                }
+            }
+        }
+
+        let r3 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r3"))
+                }
+            }
+        }
+
+        let _ = Requester.sequence([r1, r2, r3])
+            .onSuccess { value in
+                XCTAssertEqual(value, ["r1", "r2", "r3"])
+                expect.fulfill()
+            }
+            .onFailure { _ in
+                XCTFail("shoud not fail")
+                expect.fulfill()
+            }
+            .onCancelled {
+                XCTFail("shoud not be cancelled")
+                expect.fulfill()
+            }
+            .request()
+
+        self.waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error)
+        }
+    }
+
+    func testSequence_failure() {
+        let expect = expectation(description: "result")
+
+        let r1 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r1"))
+                }
+            }
+        }
+
+        let r2 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.4) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    let error = NSError(domain: "test", code: 0, userInfo: [:])
+                    completion(.failure(error))
+                }
+            }
+        }
+
+        let r3 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r3"))
+                }
+            }
+        }
+
+        let _ = Requester.sequence([r1, r2, r3])
+            .onSuccess { value in
+                XCTFail("should not succeed")
+                expect.fulfill()
+            }
+            .onFailure { _ in
+                expect.fulfill()
+            }
+            .onCancelled {
+                XCTFail("should not be cancelled")
+                expect.fulfill()
+            }
+            .request()
+
+        self.waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error)
+        }
+    }
+
+    func testConcurrently_success() {
+        let expect = expectation(description: "result")
+
+        let r1 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r1"))
+                }
+            }
+        }
+
+        let r2 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.4) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r2"))
+                }
+            }
+        }
+
+        let r3 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r3"))
+                }
+            }
+        }
+
+        let _ = Requester.concurrently([r1, r2, r3])
+            .onSuccess { value in
+                XCTAssertEqual(value, ["r1", "r2", "r3"])
+                expect.fulfill()
+            }
+            .onFailure { _ in
+                XCTFail("shoud not fail")
+                expect.fulfill()
+            }
+            .onCancelled {
+                XCTFail("shoud not be cancelled")
+                expect.fulfill()
+            }
+            .request()
+
+        self.waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error)
+        }
+    }
+
+    func testConcurrently_failure() {
+        let expect = expectation(description: "result")
+
+        let r1 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r1"))
+                }
+            }
+        }
+
+        let r2 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.4) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    let error = NSError(domain: "test", code: 0, userInfo: [:])
+                    completion(.failure(error))
+                }
+            }
+        }
+
+        let r3 = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("r3"))
+                }
+            }
+        }
+
+        let _ = Requester.concurrently([r1, r2, r3])
+            .onSuccess { value in
+                XCTFail("should not succeed")
+                expect.fulfill()
+            }
+            .onFailure { _ in
+                expect.fulfill()
+            }
+            .onCancelled {
+                XCTFail("should not be cancelled")
+                expect.fulfill()
+            }
+            .request()
+
+        self.waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error)
+        }
+    }
 }
 
 #if os(Linux)
