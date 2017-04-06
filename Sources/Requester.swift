@@ -198,26 +198,23 @@ public struct Requester<T> {
     }
 }
 
-class DelegateRequestCancelable: RequestCancelable {
-    public var cancelImp: ((Void) -> (Void))?
+private class DelegateRequestCancelable: RequestCancelable {
+    var cancelImp: ((Void) -> (Void))?
 
-    public init(cancelImp: @escaping (Void) -> Void) {
+    init(cancelImp: @escaping (Void) -> Void) {
         self.cancelImp = cancelImp
     }
 
     func cancel() {
-        guard let imp = cancelImp else {
-            return
-        }
-        imp()
-        self.cancelImp = nil
+        cancelImp?()
+        cancelImp = nil
     }
 }
 
 private class SerialRequestCancelable: RequestCancelable {
-    public var cancelable: RequestCancelable?
+    var cancelable: RequestCancelable?
     
-    public func cancel() {
+    func cancel() {
         cancelable?.cancel()
         cancelable = nil
     }
