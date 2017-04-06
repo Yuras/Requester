@@ -15,6 +15,11 @@ public enum RequestResult<T> {
     case cancelled
 }
 
+public enum RequestEither<T, U> {
+    case left(T)
+    case right(U)
+}
+
 public struct Requester<T> {
     
     private let requestImpl: (@escaping (RequestResult<T>) -> Void)->(RequestCancelable)
@@ -136,9 +141,9 @@ public struct Requester<T> {
     /**
      Run two requests concurrently, return the result of the first successfull one, other one will be cancelled. When one of them fails, other one is cancelled. On cancel, it cancelles both children.
      */
-    public func race(_ right: Requester<T>) -> Requester<T> {
+    public func race<U>(_ right: Requester<U>) -> Requester<RequestEither<T,U>> {
         let left = self
-        return Requester<T> { completion in
+        return Requester<RequestEither<T,U>> { completion in
             var leftRequest: RequestCancelable?
             var rightRequest: RequestCancelable?
 
@@ -147,7 +152,7 @@ public struct Requester<T> {
             // number of childred exited so far
             var exited = 0
 
-            func handler(other: RequestCancelable?) -> ((RequestResult<T>) -> Void) {
+            func handler(other: RequestCancelable?) -> ((RequestResult<RequestEither<T,U>>) -> Void) {
                 return { result in
                     exited += 1
 
@@ -177,12 +182,12 @@ public struct Requester<T> {
                 }
             }
 
-            leftRequest = left.request(handler(other: rightRequest))
+            leftRequest = left.map{.left($0)}.request(handler(other: rightRequest))
 
             // Note that left could immediately return result (or just fail)
             // We don't need to start the right one in that case
             if !done {
-                rightRequest = right.request(handler(other: leftRequest))
+                rightRequest = right.map{.right($0)}.request(handler(other: leftRequest))
             }
 
             return DelegateRequestCancelable {

@@ -392,19 +392,24 @@ class RequesterTests: XCTestCase {
             }
         }
 
-        let right = Requester<String> { completion in
+        let right = Requester<Int> { completion in
             return DispatchQueue.main.after(timeInterval: 1) { cancelled in
                 if cancelled {
                     completion(.cancelled)
                 } else {
-                    completion(.success("right"))
+                    completion(.success(5))
                 }
             }
         }
 
         let _ = left.race(right)
             .onSuccess { value in
-                XCTAssertEqual(value, "left")
+                switch value {
+                case .left(let v):
+                    XCTAssertEqual(v, "left")
+                case .right(_):
+                    XCTFail("should be left")
+                }
                 expect.fulfill()
             }
             .onFailure { _ in
@@ -447,7 +452,12 @@ class RequesterTests: XCTestCase {
 
         let _ = left.race(right)
             .onSuccess { value in
-                XCTAssertEqual(value, "right")
+                switch value {
+                case .left(_):
+                    XCTFail("should be right")
+                case .right(let v):
+                    XCTAssertEqual(v, "right")
+                }
                 expect.fulfill()
             }
             .onFailure { _ in
@@ -487,7 +497,12 @@ class RequesterTests: XCTestCase {
 
         let _ = left.race(right)
             .onSuccess { value in
-                XCTAssertEqual(value, "left")
+                switch value {
+                case .left(let v):
+                    XCTAssertEqual(v, "left")
+                case .right(_):
+                    XCTFail("should be left")
+                }
                 expect.fulfill()
             }
             .onFailure { _ in
