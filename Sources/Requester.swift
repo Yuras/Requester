@@ -27,7 +27,11 @@ public struct Requester<T> {
         return requestImpl(completion)
     }
     
-    public func then<U>(requester: @escaping (T)->Requester<U>) -> Requester<U> {
+    public func request() -> RequestCancelable {
+        return request { _ in }
+    }
+    
+    public func then<U>(_ requester: @escaping (T)->Requester<U>) -> Requester<U> {
         return Requester<U>{ completion  in
             let serial = SerialRequestCancelable()
             serial.cancelable = self.request { result in
@@ -68,6 +72,54 @@ public struct Requester<T> {
                 case .failure(let error):
                     completion(.failure(error))
                 case .cancelled:
+                    completion(.cancelled)
+                }
+            }
+        }
+    }
+    
+    public func onSuccess(_ handler:  @escaping(T) -> Void) -> Requester<T> {
+        return Requester { completion in
+            return self.request { result in
+                switch result {
+                case .success(let value):
+                    handler(value)
+                    completion(.success(value))
+                case .failure(let error):
+                    completion(.failure(error))
+                case .cancelled:
+                    completion(.cancelled)
+                }
+            }
+        }
+    }
+
+    public func onFailure(_ handler:  @escaping(Error) -> Void) -> Requester<T> {
+        return Requester { completion in
+            return self.request { result in
+                switch result {
+                case .success(let value):
+                    completion(.success(value))
+                case .failure(let error):
+                    handler(error)
+                    completion(.failure(error))
+                case .cancelled:
+                    completion(.cancelled)
+                }
+            }
+        }
+    }
+    
+    public func onCancelled(_ handler:  @escaping() -> Void) -> Requester<T> {
+        return Requester { completion in
+            return self.request { result in
+                switch result {
+                case .success(let value):
+                    completion(.success(value))
+                case .failure(let error):
+                    completion(.failure(error))
+                case .cancelled:
+                    handler()
                     completion(.cancelled)
                 }
             }
