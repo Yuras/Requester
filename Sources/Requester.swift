@@ -23,6 +23,13 @@ public struct Requester<T> {
         requestImpl = request
     }
     
+    public init(result: RequestResult<T>) {
+        requestImpl =  { completion in
+            completion(result)
+            return EmptyRequestCancelable()
+        }
+    }
+    
     public func request(_ completion: @escaping (RequestResult<T>) -> Void) -> RequestCancelable {
         return requestImpl(completion)
     }
@@ -32,7 +39,7 @@ public struct Requester<T> {
     }
     
     public func then<U>(_ requester: @escaping (T)->Requester<U>) -> Requester<U> {
-        return Requester<U>{ completion  in
+        return Requester<U> { completion  in
             let serial = SerialRequestCancelable()
             serial.cancelable = self.request { result in
                 switch result {
@@ -134,6 +141,10 @@ private class SerialRequestCancelable: RequestCancelable {
         cancelable?.cancel()
         cancelable = nil
     }
+}
+
+private class EmptyRequestCancelable: RequestCancelable {
+    func cancel() { }
 }
 
 
