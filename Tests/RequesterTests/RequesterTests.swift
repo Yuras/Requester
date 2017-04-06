@@ -5,7 +5,7 @@
 
 import Foundation
 import XCTest
-import Requester
+@testable import Requester
 
 func requestHello(completion: @escaping (RequestResult<String>) -> Void)->(RequestCancelable) {
     return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
@@ -287,6 +287,219 @@ class RequesterTests: XCTestCase {
         c.cancel()
         
         
+        self.waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error)
+        }
+    }
+
+    func testRace_cancel() {
+        let expect = expectation(description: "result")
+
+        let left = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("Hello"))
+                }
+            }
+        }
+
+        let right = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("Hello"))
+                }
+            }
+        }
+
+        let r = left.race(right)
+            .onSuccess { _ in
+                XCTFail("shoud not succeed")
+                expect.fulfill()
+            }
+            .onFailure { _ in
+                XCTFail("shoud not fail")
+                expect.fulfill()
+            }
+            .onCancelled {
+                expect.fulfill()
+            }
+            .request()
+
+        r.cancel()
+
+        self.waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error)
+        }
+    }
+
+    func testRace_error() {
+        let expect = expectation(description: "result")
+
+        let left = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    let error = NSError(domain: "test", code: 0, userInfo: [:])
+                    completion(.failure(error))
+                }
+            }
+        }
+
+        let right = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 1) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("Hello"))
+                }
+            }
+        }
+
+        let _ = left.race(right)
+            .onSuccess { _ in
+                XCTFail("shoud not succeed")
+                expect.fulfill()
+            }
+            .onFailure { _ in
+                expect.fulfill()
+            }
+            .onCancelled {
+                XCTFail("shoud not be cancelled 1")
+                expect.fulfill()
+            }
+            .request()
+
+        self.waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error)
+        }
+    }
+
+    func testRace_success_left() {
+        let expect = expectation(description: "result")
+
+        let left = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("left"))
+                }
+            }
+        }
+
+        let right = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 1) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("right"))
+                }
+            }
+        }
+
+        let _ = left.race(right)
+            .onSuccess { value in
+                XCTAssertEqual(value, "left")
+                expect.fulfill()
+            }
+            .onFailure { _ in
+                XCTFail("shoud not fail")
+                expect.fulfill()
+            }
+            .onCancelled {
+                XCTFail("shoud not be cancelled 2")
+                expect.fulfill()
+            }
+            .request()
+
+        self.waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error)
+        }
+    }
+
+    func testRace_success_right() {
+        let expect = expectation(description: "result")
+
+        let left = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 1) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("left"))
+                }
+            }
+        }
+
+        let right = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("right"))
+                }
+            }
+        }
+
+        let _ = left.race(right)
+            .onSuccess { value in
+                XCTAssertEqual(value, "right")
+                expect.fulfill()
+            }
+            .onFailure { _ in
+                XCTFail("shoud not fail")
+                expect.fulfill()
+            }
+            .onCancelled {
+                XCTFail("shoud not be cancelled 3")
+                expect.fulfill()
+            }
+            .request()
+
+        self.waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error)
+        }
+    }
+
+    func testRace_success_immediate() {
+        let expect = expectation(description: "result")
+
+        // left succeeds immediately
+        let left = Requester<String> { completion in
+            completion(.success("left"))
+            return DelegateRequestCancelable { _ in
+            }
+        }
+
+        let right = Requester<String> { completion in
+            return DispatchQueue.main.after(timeInterval: 0.2) { cancelled in
+                if cancelled {
+                    completion(.cancelled)
+                } else {
+                    completion(.success("right"))
+                }
+            }
+        }
+
+        let _ = left.race(right)
+            .onSuccess { value in
+                XCTAssertEqual(value, "left")
+                expect.fulfill()
+            }
+            .onFailure { _ in
+                XCTFail("shoud not fail")
+                expect.fulfill()
+            }
+            .onCancelled {
+                XCTFail("shoud not be cancelled 3")
+                expect.fulfill()
+            }
+            .request()
+
         self.waitForExpectations(timeout: 5) { error in
             XCTAssertNil(error)
         }
