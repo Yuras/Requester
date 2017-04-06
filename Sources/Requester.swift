@@ -90,6 +90,16 @@ public struct Requester<T> {
         }
     }
     
+    public func just<U>(_ value: U) -> Requester<U> {
+        return map { _ -> U in
+            return value
+        }
+    }
+    
+    public var just: Requester<Void> {
+        return just(())
+    }
+    
     public func onSuccess(_ handler:  @escaping(T) -> Void) -> Requester<T> {
         return Requester { completion in
             return self.request { result in
